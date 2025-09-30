@@ -12,13 +12,11 @@ module_cli_tools() {
   install_executable "usr-local-bin/backup-database" "/usr/local/bin/backup-database"
   install_executable "usr-local-bin/setup-ssl" "/usr/local/bin/setup-ssl"
   install_executable "usr-local-bin/check-ssl" "/usr/local/bin/check-ssl"
-  install_executable "usr-local-bin/sync-claude-config" "/usr/local/bin/sync-claude-config"
 
   ln -sf /usr/local/bin/server-help /usr/local/bin/shelp
   ln -sf /usr/local/bin/server-info /usr/local/bin/sinfo
   ln -sf /usr/local/bin/mailpit-status /usr/local/bin/mailpit
   ln -sf /usr/local/bin/mailpit-status /usr/local/bin/mailhog
-  ln -sf /usr/local/bin/sync-claude-config /usr/local/bin/claude-sync
 
   append_if_missing "alias shelp='server-help'" /home/ubuntu/.bashrc
   append_if_missing "alias sinfo='server-info'" /home/ubuntu/.bashrc
