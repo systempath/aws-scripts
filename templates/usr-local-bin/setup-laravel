@@ -419,12 +419,6 @@ else
     echo "No Vite config found - skipping Vite setup"
 fi
 
-# Sync Claude configuration from S3
-echo ""
-echo "Syncing Claude Code configuration..."
-# Run sync but don't fail if some files are missing
-/usr/local/bin/sync-claude-config || true
-
 echo ""
 echo "=== Final Production Optimization ==="
 echo "======================================"
@@ -493,8 +487,7 @@ sudo -u ubuntu git commit -m "Initial Laravel setup with all packages and config
 - Spatie Laravel PDF for PDF generation
 - Laravel Boost for performance
 - Mailpit for email testing
-- Vite development server configured
-- Claude Code configuration synced" || echo "Git commit skipped (nothing to commit or not a git repo)"
+- Vite development server configured" || echo "Git commit skipped (nothing to commit or not a git repo)"
 
 echo "✅ Git repository initialized with initial commit"
 

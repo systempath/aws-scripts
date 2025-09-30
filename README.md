@@ -32,9 +32,9 @@ bin/build-userdata
 ### Infrastructure & Tools
 
 - **Web Stack**: Nginx, PHP 8.4-FPM, Composer
-- **JavaScript**: Node.js 22 (via NVM), pnpm
+- **JavaScript**: Node.js 22 (via NVM), pnpm, PM2
 - **Database**: PostgreSQL 17, Redis, Adminer
-- **Dev Tools**: Mailpit, AWS CLI, GitHub CLI
+- **Dev Tools**: Mailpit, AWS CLI, GitHub CLI, Claude Code CLI
 - **Security**: UFW firewall, Fail2ban, SSH hardening
 - **Laravel Helpers**: 20+ commands (`deploy`, `fresh`, `vdev`, etc.)
 
