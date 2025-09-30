@@ -29,12 +29,51 @@ bin/build-userdata
 
 ## What Gets Installed
 
+### Infrastructure & Tools
+
 - **Web Stack**: Nginx, PHP 8.4-FPM, Composer
 - **JavaScript**: Node.js 22 (via NVM), pnpm
 - **Database**: PostgreSQL 17, Redis, Adminer
 - **Dev Tools**: Mailpit, AWS CLI, GitHub CLI
 - **Security**: UFW firewall, Fail2ban, SSH hardening
 - **Laravel Helpers**: 20+ commands (`deploy`, `fresh`, `vdev`, etc.)
+
+### Laravel Packages (via `setup-laravel`)
+
+When you run `setup-laravel`, a complete Laravel application is created with:
+
+**Core Framework**
+- Laravel 11 with Inertia.js + React starter kit
+- Pest testing framework
+- Vite for asset building
+
+**Development & Debugging**
+- **Laravel Telescope** – Debugging dashboard with request/query/job monitoring
+- **Laravel Boost** – Performance optimizations
+
+**Payment Processing**
+- **Laravel Cashier** – Stripe subscription billing integration
+
+**AWS Integration**
+- **AWS SDK for PHP** – Full AWS service integration (S3, SES, etc.)
+- **AWS SDK Laravel Service Provider** – Laravel-specific AWS bindings
+
+**Data & Type Safety**
+- **Spatie Laravel Data** – Typed DTOs with validation
+- **Spatie TypeScript Transformer** – Generate TypeScript definitions from PHP
+
+**User Management & Authorization**
+- **Laravel Pennant** – Feature flags and A/B testing
+- **Spatie Laravel Permission** – Role-based access control (RBAC)
+
+**Audit & Logging**
+- **Spatie Laravel Activity Log** – Track user actions and model changes
+
+**Media & Files**
+- **Spatie Laravel Media Library** – File uploads with image manipulation
+
+**Document Generation**
+- **Spatie Laravel PDF** – Generate PDFs from views using Chromium
 
 ## Repository Layout
 
