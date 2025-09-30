@@ -1,6 +1,16 @@
-# EC2 User Data for Laravel Development
+<div align="center">
+  <img src="https://systempath.com/assets/logo.svg" alt="SystemPath" width="200"/>
 
-Provision an Ubuntu EC2 instance for Laravel/Inertia/React + PostgreSQL development. The provisioning script is auto-generated from modular sources for readability while deploying as a single bootstrap script.
+  # Ignite
+
+  **Lightning-fast Laravel development environments for AWS EC2**
+
+  Launch production-ready Laravel/Inertia/React + PostgreSQL stacks in minutes. Built by [SystemPath](https://systempath.com).
+</div>
+
+---
+
+Ignite provisions Ubuntu EC2 instances with everything you need for modern Laravel development. The provisioning script is auto-generated from modular sources for readability while deploying as a single bootstrap script.
 
 ## Quick Start
 
@@ -9,19 +19,19 @@ Use this as EC2 user data or run on an existing Ubuntu instance:
 
 ```bash
 #!/bin/bash
-curl -fsSL https://raw.githubusercontent.com/systempath/aws-scripts/main/dist/ec2-userdata.sh | bash
+curl -fsSL https://raw.githubusercontent.com/systempath/ignite/main/dist/ec2-userdata.sh | bash
 ```
 
 ### Option 2: Via Downloader Script
 ```bash
 #!/bin/bash
-curl -fsSL https://raw.githubusercontent.com/systempath/aws-scripts/main/aws-ec2-user-data-downloader.sh | bash
+curl -fsSL https://raw.githubusercontent.com/systempath/ignite/main/aws-ec2-user-data-downloader.sh | bash
 ```
 
 ### Option 3: Customize & Build
 ```bash
-git clone https://github.com/systempath/aws-scripts.git
-cd aws-scripts
+git clone https://github.com/systempath/ignite.git
+cd ignite
 # Edit config/variables.sh or modules/ as needed
 bin/build-userdata
 # Use your custom dist/ec2-userdata.sh
@@ -106,7 +116,7 @@ Use custom hosted version:
 
 ```bash
 export USERDATA_URL="https://your-domain.com/custom-userdata.sh"
-curl -fsSL https://raw.githubusercontent.com/systempath/aws-scripts/main/aws-ec2-user-data-downloader.sh | bash
+curl -fsSL https://raw.githubusercontent.com/systempath/ignite/main/aws-ec2-user-data-downloader.sh | bash
 ```
 
 ## Important Notes
@@ -115,3 +125,10 @@ curl -fsSL https://raw.githubusercontent.com/systempath/aws-scripts/main/aws-ec2
 - **Commit sources** – Commit changes to `modules/` and `templates/`, not generated `dist/`
 - **Git config** – No git identity is configured automatically. Run `gkey` after provisioning to optionally set up git user/email
 - **Helper scripts** – After provisioning, run `server-help` to see all available commands
+
+---
+
+<div align="center">
+  <p>Built with ❤️ by <a href="https://systempath.com">SystemPath</a></p>
+  <p><sub>© 2025 SystemPath. All rights reserved.</sub></p>
+</div>
