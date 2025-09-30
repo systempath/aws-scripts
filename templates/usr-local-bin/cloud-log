@@ -1,0 +1,25 @@
+#!/bin/bash
+
+# Colors
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+CYAN='\033[0;36m'
+NC='\033[0m'
+
+clear
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${CYAN}                    EC2 User-Data Script Log Monitor                       ${NC}"
+echo -e "${CYAN}═══════════════════════════════════════════════════════════════════════════${NC}"
+echo ""
+
+if [ "$1" = "--full" ] || [ "$1" = "-f" ]; then
+    echo -e "${YELLOW}Showing full log (press 'q' to exit):${NC}"
+    echo ""
+    less /var/log/user-data.log
+else
+    echo -e "${GREEN}Monitoring user-data script execution (Ctrl+C to exit)...${NC}"
+    echo -e "${YELLOW}Tip: Use 'cloud-log --full' to see the entire log${NC}"
+    echo ""
+    echo -e "${CYAN}─────────────────────────────────────────────────────────────────${NC}"
+    tail -f /var/log/user-data.log
+fi

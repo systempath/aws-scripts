@@ -1,0 +1,75 @@
+#!/bin/bash
+set -euo pipefail
+
+ROOT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+DIST_DIR="$ROOT_DIR/dist"
+OUTPUT="$DIST_DIR/ec2-userdata.sh"
+
+mkdir -p "$DIST_DIR"
+
+MODULE_FILES=()
+while IFS= read -r file; do
+  MODULE_FILES+=("$file")
+done < <(find "$ROOT_DIR/modules" -maxdepth 1 -type f -name '*.sh' | sort -V)
+
+TEMPLATE_FILES=()
+while IFS= read -r file; do
+  TEMPLATE_FILES+=("$file")
+done < <(find "$ROOT_DIR/templates" -type f | sort)
+
+{
+  cat <<'HEADER'
+#!/bin/bash
+set -euo pipefail
+
+# Auto-generated. Edit sources in modules/ and templates/.
+
+# Log everything to user-data log
+exec > >(tee -a /var/log/userdata.log) 2>&1
+HEADER
+
+  echo
+  cat "$ROOT_DIR/config/variables.sh"
+  echo
+  cat "$ROOT_DIR/config/helpers.sh"
+  echo
+  echo "payload_b64() {"
+  echo "  local key=\$1"
+  echo "  case \"\$key\" in"
+  if [ ${#TEMPLATE_FILES[@]} -gt 0 ]; then
+    for tpl in "${TEMPLATE_FILES[@]}"; do
+      rel=${tpl#"$ROOT_DIR/templates/"}
+      b64=$(base64 < "$tpl")
+      printf "    \"%s\")\n" "$rel"
+      echo "      cat <<'__PAYLOAD__'"
+      echo "$b64"
+      echo "__PAYLOAD__"
+      echo "      ;;"
+    done
+  fi
+  cat <<'PAYLOAD_FOOTER'
+    *)
+      echo "Unknown payload: $key" >&2
+      return 1
+      ;;
+  esac
+}
+PAYLOAD_FOOTER
+
+  if [ ${#MODULE_FILES[@]} -gt 0 ]; then
+    for module in "${MODULE_FILES[@]}"; do
+      echo
+      cat "$module"
+    done
+  fi
+
+  cat <<'FOOTER'
+main() {
+  run_registered_steps
+}
+
+main "$@"
+FOOTER
+} > "$OUTPUT"
+
+chmod +x "$OUTPUT"

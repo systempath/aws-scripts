@@ -1,0 +1,30 @@
+# macOS
+.DS_Store
+
+# Sensitive files
+*.pem
+*.key
+id_rsa*
+*.crt
+*.cer
+credentials
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+/var/log/
+
+# Local config overrides
+config/*.local.sh
+*.local.sh
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

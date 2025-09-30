@@ -1,0 +1,262 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "=== Repository Development Preparation ==="
+echo "=========================================="
+
+# Check if we're in a Laravel project
+if [ ! -f "/var/www/html/artisan" ]; then
+    echo "❌ Laravel not found at /var/www/html"
+    echo "Please run setup-laravel first"
+    exit 1
+fi
+
+cd /var/www/html
+
+echo ""
+echo "Setting up Pest testing environment..."
+
+# 1. Configure Pest.php for Both Test Directories
+echo "Configuring Pest.php for Feature and Unit tests..."
+cat > tests/Pest.php << 'EOF'
+<?php
+
+use Tests\TestCase;
+use Illuminate\Foundation\Testing\RefreshDatabase;
+
+// Apply to BOTH Feature and Unit tests - this was the main issue
+pest()->extend(TestCase::class)
+    ->use(RefreshDatabase::class)
+    ->in('Feature', 'Unit');
+EOF
+
+echo "✅ Pest.php configured for both test directories"
+
+# 2. Create .env.testing for PostgreSQL
+echo ""
+echo "Creating .env.testing for PostgreSQL..."
+if [ -f .env ]; then
+    cp .env .env.testing
+
+    # Update testing environment settings
+    sed -i 's/^APP_ENV=.*/APP_ENV=testing/' .env.testing
+    sed -i 's/^DB_DATABASE=.*/DB_DATABASE=testing/' .env.testing
+
+    # Disable Telescope in testing
+    if grep -q "^TELESCOPE_ENABLED=" .env.testing; then
+        sed -i 's/^TELESCOPE_ENABLED=.*/TELESCOPE_ENABLED=false/' .env.testing
+    else
+        echo "TELESCOPE_ENABLED=false" >> .env.testing
+    fi
+
+    # Set error logging level
+    if grep -q "^LOG_LEVEL=" .env.testing; then
+        sed -i 's/^LOG_LEVEL=.*/LOG_LEVEL=error/' .env.testing
+    else
+        echo "LOG_LEVEL=error" >> .env.testing
+    fi
+
+    echo "✅ .env.testing created with PostgreSQL configuration"
+else
+    echo "⚠️  .env file not found - skipping .env.testing creation"
+fi
+
+# 3. Create Testing Database with proper PostgreSQL setup
+echo ""
+echo "Setting up PostgreSQL testing database..."
+
+# Get database user from main setup (should be 'laravel')
+DB_USER="laravel"
+
+# Check if database exists and recreate if needed
+if sudo -u postgres psql -lqt | cut -d \| -f 1 | grep -qw testing; then
+    echo "Testing database exists, dropping and recreating..."
+    sudo -u postgres dropdb testing || true
+fi
+
+# Create testing database with proper owner
+sudo -u postgres createdb -O ${DB_USER} testing || {
+    echo "❌ Failed to create testing database"
+    exit 1
+}
+echo "✅ Testing database created with owner ${DB_USER}"
+
+# Add required extensions (matching main database setup)
+echo "Adding database extensions..."
+sudo -u postgres psql -d testing -c "CREATE EXTENSION IF NOT EXISTS pgcrypto;" || {
+    echo "❌ Failed to add pgcrypto extension"
+    exit 1
+}
+sudo -u postgres psql -d testing -c "CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";" || {
+    echo "❌ Failed to add uuid-ossp extension"
+    exit 1
+}
+echo "✅ Database extensions added (pgcrypto, uuid-ossp)"
+
+# Grant all privileges to the database user
+sudo -u postgres psql -c "GRANT ALL PRIVILEGES ON DATABASE testing TO ${DB_USER};" || {
+    echo "❌ Failed to grant database privileges"
+    exit 1
+}
+sudo -u postgres psql -d testing -c "GRANT ALL ON SCHEMA public TO ${DB_USER};" || {
+    echo "❌ Failed to grant schema privileges"
+    exit 1
+}
+echo "✅ Database permissions granted to ${DB_USER}"
+
+# 4. Configure phpunit.xml (without DB overrides to use .env.testing)
+echo ""
+echo "Configuring phpunit.xml to use .env.testing for database..."
+cat > phpunit.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8"?>
+<phpunit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:noNamespaceSchemaLocation="vendor/phpunit/phpunit/phpunit.xsd"
+         bootstrap="vendor/autoload.php"
+         colors="true"
+>
+    <testsuites>
+        <testsuite name="Unit">
+            <directory>tests/Unit</directory>
+        </testsuite>
+        <testsuite name="Feature">
+            <directory>tests/Feature</directory>
+        </testsuite>
+    </testsuites>
+    <source>
+        <include>
+            <directory>app</directory>
+        </include>
+    </source>
+    <php>
+        <env name="APP_ENV" value="testing"/>
+        <env name="APP_MAINTENANCE_DRIVER" value="file"/>
+        <env name="BCRYPT_ROUNDS" value="4"/>
+        <env name="CACHE_STORE" value="array"/>
+        <!-- Database configuration loaded from .env.testing -->
+        <!-- NOT hardcoded here to avoid overriding .env.testing -->
+        <env name="MAIL_MAILER" value="array"/>
+        <env name="PULSE_ENABLED" value="false"/>
+        <env name="QUEUE_CONNECTION" value="sync"/>
+        <env name="SESSION_DRIVER" value="array"/>
+        <env name="TELESCOPE_ENABLED" value="false"/>
+    </php>
+</phpunit>
+EOF
+
+echo "✅ phpunit.xml configured (database settings from .env.testing)"
+
+# 5. Run migrations on test database
+echo ""
+echo "Running migrations on test database..."
+
+# Clear Laravel configuration cache
+php artisan config:clear
+php artisan cache:clear
+
+# Run fresh migrations on the testing database
+php artisan migrate:fresh --database=testing --force || {
+    echo "❌ Failed to run migrations on testing database"
+    echo "Please check database connectivity and permissions"
+    exit 1
+}
+echo "✅ Migrations completed on testing database"
+
+# 6. Verify test environment configuration
+echo ""
+echo "Verifying test environment setup..."
+
+# Check .env.testing has correct database
+if [ -f .env.testing ] && grep -q "DB_DATABASE=testing" .env.testing; then
+    echo "✅ .env.testing configured with testing database"
+else
+    echo "❌ .env.testing missing or incorrectly configured"
+    exit 1
+fi
+
+# Test database connectivity
+sudo -u postgres psql -d testing -c "SELECT 1;" > /dev/null 2>&1 || {
+    echo "❌ Cannot connect to testing database"
+    exit 1
+}
+echo "✅ Testing database is accessible"
+
+# Check phpunit.xml doesn't override database settings
+if grep -q '<env name="DB_CONNECTION" value="pgsql"' phpunit.xml || grep -q '<env name="DB_DATABASE" value="testing"' phpunit.xml; then
+    echo "⚠️  Warning: phpunit.xml contains database settings that will override .env.testing"
+    echo "   Consider removing DB_CONNECTION and DB_DATABASE from phpunit.xml"
+fi
+
+# 7. Add Test Helper Script
+echo ""
+echo "Creating test helper script..."
+mkdir -p bin
+cat > bin/test << 'EOF'
+#!/bin/bash
+# Quick test runner with common options
+
+# Handle different test commands
+if [ "$1" == "parallel" ]; then
+    php artisan test --parallel
+elif [ "$1" == "coverage" ]; then
+    php artisan test --coverage --min=80
+elif [ "$1" == "watch" ]; then
+    php artisan test --watch
+elif [ "$1" == "filter" ] && [ -n "$2" ]; then
+    php artisan test --filter="$2"
+elif [ "$1" == "group" ] && [ -n "$2" ]; then
+    php artisan test --group="$2"
+elif [ "$1" == "stop" ]; then
+    php artisan test --stop-on-failure
+else
+    php artisan test "$@"
+fi
+EOF
+
+chmod +x bin/test
+chown ubuntu:www-data bin/test
+
+echo "✅ Test helper script created at bin/test"
+
+# Create basic test structure if missing
+echo ""
+echo "Ensuring test directory structure..."
+mkdir -p tests/Feature
+mkdir -p tests/Unit
+chown -R ubuntu:www-data tests
+
+# Run initial test to verify setup
+echo ""
+echo "Verifying test setup..."
+sudo -u ubuntu php artisan test --parallel --stop-on-failure || {
+    echo "⚠️  Tests failed - this is normal for a new project"
+    echo "   Run 'php artisan test' to see detailed results"
+}
+
+echo ""
+echo "====================================="
+echo "✅ Repository preparation complete!"
+echo "====================================="
+echo ""
+echo "Test environment configured:"
+echo "  ✅ Pest.php configured for Feature and Unit tests"
+echo "  ✅ .env.testing created for PostgreSQL"
+echo "  ✅ Testing database created"
+echo "  ✅ phpunit.xml configured to use .env.testing"
+echo "  ✅ Database extensions added (pgcrypto, uuid-ossp)"
+echo "  ✅ Database permissions configured"
+echo "  ✅ Migrations run on testing database"
+echo "  ✅ Test helper script at bin/test"
+echo ""
+echo "Quick test commands:"
+echo "  bin/test              # Run all tests"
+echo "  bin/test parallel     # Run tests in parallel"
+echo "  bin/test coverage     # Run with coverage (min 80%)"
+echo "  bin/test watch        # Run tests in watch mode"
+echo "  bin/test filter Name  # Run tests matching 'Name'"
+echo "  bin/test stop         # Stop on first failure"
+echo ""
+echo "Or use artisan directly:"
+echo "  php artisan test"
+echo "  php artisan test --parallel"
+echo "  php artisan test --coverage --min=80"
+echo ""

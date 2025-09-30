@@ -1,0 +1,1 @@
+0 2 * * * postgres /usr/local/bin/backup-database >> /var/log/database-backup.log 2>&1

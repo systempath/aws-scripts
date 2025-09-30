@@ -1,0 +1,61 @@
+#!/bin/bash
+
+# Colors
+CYAN='\033[0;36m'
+BRIGHT_CYAN='\033[1;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+DIM='\033[2m'
+NC='\033[0m'
+
+clear
+echo -e "${BRIGHT_CYAN}╔═══════════════════════════════════════════════════════════════╗${NC}"
+echo -e "${BRIGHT_CYAN}║               SYSTEM PATH™ Mailpit                           ║${NC}"
+echo -e "${BRIGHT_CYAN}║                   📧 Email Testing Tool                      ║${NC}"
+echo -e "${BRIGHT_CYAN}╚═══════════════════════════════════════════════════════════════╝${NC}"
+echo ""
+
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || echo "your-server-ip")
+
+echo -e "${GREEN}📧 Mailpit Web Interface:${NC}"
+echo -e "  ${BLUE}http://${SERVER_IP}:8025${NC}"
+echo ""
+
+echo -e "${GREEN}Status:${NC}"
+if systemctl is-active --quiet mailpit; then
+    echo -e "  ${GREEN}● Running${NC} ✓"
+else
+    echo -e "  ${RED}● Stopped${NC} ✗"
+    echo -e "  ${YELLOW}Start with: sudo systemctl start mailpit${NC}"
+fi
+echo ""
+
+echo -e "${GREEN}Laravel Configuration:${NC}"
+echo -e "  Add to your .env file:"
+echo -e "  ${YELLOW}MAIL_MAILER=smtp${NC}"
+echo -e "  ${YELLOW}MAIL_HOST=127.0.0.1${NC}"
+echo -e "  ${YELLOW}MAIL_PORT=1025${NC}"
+echo -e "  ${YELLOW}MAIL_USERNAME=null${NC}"
+echo -e "  ${YELLOW}MAIL_PASSWORD=null${NC}"
+echo -e "  ${YELLOW}MAIL_ENCRYPTION=null${NC}"
+echo ""
+
+echo -e "${GREEN}Commands:${NC}"
+echo -e "  ${CYAN}sudo systemctl status mailpit${NC}   View service status"
+echo -e "  ${CYAN}sudo systemctl restart mailpit${NC}  Restart service"
+echo -e "  ${CYAN}sudo journalctl -u mailpit${NC}      View logs"
+echo ""
+
+echo -e "${GREEN}What Mailpit Does:${NC}"
+echo -e "  • Catches all outgoing emails from Laravel"
+echo -e "  • Shows emails in web interface (no actual sending)"
+echo -e "  • Perfect for testing email flows safely"
+echo -e "  • Prevents accidental emails to real users"
+echo -e "  • Modern, fast, actively maintained (2025)"
+echo ""
+
+echo -e "${DIM}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${CYAN}        All emails sent by Laravel appear at port 8025${NC}"
+echo -e "${DIM}═══════════════════════════════════════════════════════════════${NC}"

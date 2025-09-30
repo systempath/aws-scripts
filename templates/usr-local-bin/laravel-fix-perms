@@ -1,0 +1,42 @@
+#!/bin/bash
+set -euo pipefail
+BASE="/var/www/html"
+
+# Check if running with sudo (unless already root)
+if [ "$(id -u)" != "0" ]; then
+    echo "This script must be run with sudo"
+    echo "Usage: sudo laravel-fix-perms"
+    exit 1
+fi
+
+# Check if Laravel is installed
+if [ ! -d "$BASE" ]; then
+    echo "Laravel not installed yet at $BASE"
+    exit 0
+fi
+
+# Ensure project tree is ubuntu:www-data and group-writable
+chown -R ubuntu:www-data "$BASE"
+
+# Set directory permissions
+find "$BASE" -type d -exec chmod 2775 {} \;
+
+# Set file permissions (but preserve execute bit on binaries)
+find "$BASE" -type f ! -path "*/node_modules/.bin/*" -exec chmod 0664 {} \;
+
+# Ensure all binaries in node_modules/.bin are executable
+if [ -d "$BASE/node_modules/.bin" ]; then
+    chmod +x "$BASE/node_modules/.bin/"* 2>/dev/null || true
+fi
+
+# If storage exists, set special permissions for Laravel
+if [ -d "$BASE/storage" ] && [ -d "$BASE/bootstrap/cache" ]; then
+    chown -R www-data:www-data "$BASE/storage" "$BASE/bootstrap/cache"
+    chmod -R 775 "$BASE/storage" "$BASE/bootstrap/cache"
+
+    # Set ACLs for both web and CLI user
+    setfacl -R -m u:www-data:rwx -m u:ubuntu:rwx "$BASE/storage" "$BASE/bootstrap/cache" || true
+    setfacl -R -d -m u:www-data:rwx -m u:ubuntu:rwx "$BASE/storage" "$BASE/bootstrap/cache" || true
+fi
+
+echo "Permissions fixed for Laravel at $BASE"

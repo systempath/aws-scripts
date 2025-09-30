@@ -1,0 +1,152 @@
+#!/bin/bash
+
+# Colors
+CYAN='\033[0;36m'
+BRIGHT_CYAN='\033[1;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m' # No Color
+
+clear
+echo -e "${BRIGHT_CYAN}"
+echo "▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄▄"
+echo "█                                                                              █"
+echo "█      ██████ ██    ██ ██████ ████████ ███████ ███    ███                    █"
+echo "█     ██      ██  ██  ██         ██    ██      ████  ████                    █"
+echo "█     ██████   ████   ██████     ██    █████   ██ ████ ██                    █"
+echo "█         ██    ██        ██     ██    ██      ██  ██  ██                    █"
+echo "█     ██████    ██    ██████     ██    ███████ ██      ██                    █"
+echo "█                                                                              █"
+echo "█     ██████   █████  ████████ ██   ██                                       █"
+echo "█     ██   ██ ██   ██    ██    ██   ██                                       █"
+echo "█     ██████  ███████    ██    ███████                                       █"
+echo "█     ██      ██   ██    ██    ██   ██                                       █"
+echo "█     ██      ██   ██    ██    ██   ██   ™                                   █"
+echo "█                                                                              █"
+echo -e "█                  ${YELLOW}⚡ Laravel Development Environment v1.0 ⚡${BRIGHT_CYAN}                 █"
+echo "▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀▀"
+echo -e "${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ SETUP & CONFIGURATION ──────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${CYAN}setup-laravel${NC}      Configure Laravel with database and Redis"
+echo -e "  ${CYAN}sync-claude-config${NC} Download Claude Code configuration from S3 ${YELLOW}🤖${NC}"
+echo -e "  ${CYAN}setup-ssl${NC}          Setup SSL certificate with auto-renewal"
+echo -e "  ${CYAN}check-ssl${NC}          Check SSL certificate and renewal status"
+echo -e "  ${CYAN}setup-vite-dev${NC}     Configure Vite for development"
+echo -e "  ${CYAN}laravel-fix-perms${NC}  Fix Laravel file permissions"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ DEVELOPMENT ─────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${CYAN}vdev${NC}               Start Vite dev server ${YELLOW}(shortest!)${NC}"
+echo -e "  ${CYAN}tscope${NC}             Laravel Telescope dashboard info ${YELLOW}📡${NC}"
+echo -e "  ${CYAN}mailpit${NC}            Mailpit email testing info ${YELLOW}📧${NC}"
+echo -e "  ${CYAN}start-vite-dev${NC}     Start Vite with correct IP for HMR"
+echo -e "  ${CYAN}npm run dev${NC}        Start Vite manually (from /var/www/html)"
+echo -e "  ${CYAN}artisan${NC}            Laravel artisan commands ${YELLOW}(shortcut)${NC}"
+echo -e "  ${CYAN}php artisan tinker${NC} Laravel REPL"
+echo -e "  ${CYAN}composer${NC}           PHP dependency manager"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ BUILD & DEPLOY ──────────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${CYAN}deploy${NC}             Full deployment (migrate, build, optimize) ${YELLOW}⚡${NC}"
+echo -e "  ${CYAN}fresh${NC}              Quick rebuild (clear, build, no migrate)"
+echo -e "  ${CYAN}npm run build${NC}      Build production assets only"
+echo -e "  ${CYAN}npm ci${NC}             Fast clean install of dependencies"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ GIT & GITHUB ────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${CYAN}gkey${NC}               Display GitHub deploy key ${YELLOW}(copy for GitHub)${NC}"
+echo -e "  ${CYAN}git clone${NC}          Clone repository using deploy key"
+echo -e "  ${CYAN}git status${NC}         Check repository status"
+echo -e "  ${CYAN}git pull${NC}           Pull latest changes"
+echo -e ""
+GIT_USER=$(git config --global user.name 2>/dev/null || echo "Not configured - run 'gkey'")
+GIT_EMAIL=$(git config --global user.email 2>/dev/null || echo "Not configured - run 'gkey'")
+echo -e "  ${YELLOW}Git User:${NC}  $GIT_USER"
+echo -e "  ${YELLOW}Git Email:${NC} $GIT_EMAIL"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ DATABASE ────────────────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${CYAN}sudo -u postgres psql${NC}              PostgreSQL console"
+echo -e "  ${CYAN}sudo -u postgres psql laravel${NC}      Connect to Laravel DB"
+echo -e "  ${CYAN}php artisan migrate${NC}                Run migrations"
+echo -e "  ${CYAN}php artisan migrate:fresh --seed${NC}   Reset and seed database"
+echo -e "  ${CYAN}backup-database${NC}                    Backup database manually"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ SERVICE MANAGEMENT ──────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${CYAN}systemctl status nginx${NC}             Check Nginx status"
+echo -e "  ${CYAN}systemctl status php8.4-fpm${NC}        Check PHP-FPM status"
+echo -e "  ${CYAN}systemctl status postgresql${NC}        Check PostgreSQL status"
+echo -e "  ${CYAN}systemctl status redis-server${NC}      Check Redis status"
+echo -e "  ${CYAN}supervisorctl status${NC}               Check queue workers"
+echo -e "  ${CYAN}pm2 list${NC}                          Check PM2 processes"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ IMPORTANT LOCATIONS ─────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${YELLOW}Laravel App:${NC}        /var/www/html"
+echo -e "  ${YELLOW}Nginx Config:${NC}       /etc/nginx/sites-available/default"
+echo -e "  ${YELLOW}PHP Config:${NC}         /etc/php/8.4/fpm/php.ini"
+echo -e "  ${YELLOW}DB Credentials:${NC}     /home/ubuntu/.db_credentials"
+echo -e "  ${YELLOW}Laravel Logs:${NC}       /var/www/html/storage/logs"
+echo -e "  ${YELLOW}System Logs:${NC}        /var/log/"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ ACCESS URLS ─────────────────────────────────────────────────────────────────┐${NC}"
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || echo "your-server-ip")
+echo -e "  ${BLUE}Laravel App:${NC}        http://${SERVER_IP}"
+echo -e "  ${BLUE}Mailpit (Email):${NC}    http://${SERVER_IP}:8025"
+echo -e "  ${BLUE}Adminer (DB UI):${NC}    http://${SERVER_IP}:8080"
+echo -e "  ${BLUE}Vite Dev Server:${NC}    http://${SERVER_IP}:5173"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ TROUBLESHOOTING ─────────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${YELLOW}502 Bad Gateway:${NC}        Check PHP-FPM: systemctl status php8.4-fpm"
+echo -e "  ${YELLOW}Permission errors:${NC}      Run: laravel-fix-perms"
+echo -e "  ${YELLOW}Vite HMR not working:${NC}   Use: start-vite-dev (not npm run dev)"
+echo -e "  ${YELLOW}Database issues:${NC}        Check credentials: cat /home/ubuntu/.db_credentials"
+echo -e "  ${YELLOW}Queue not processing:${NC}   Check workers: supervisorctl status"
+echo -e "  ${YELLOW}Setup progress:${NC}         Monitor with: clog or cloud-log"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ SSL/CERTIFICATES ────────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${YELLOW}SSL auto-renewal:${NC}   Enabled via systemd timer (runs twice daily)"
+echo -e "  ${YELLOW}Check status:${NC}       check-ssl"
+echo -e "  ${YELLOW}Test renewal:${NC}       sudo certbot renew --dry-run"
+echo -e "  ${YELLOW}View timer:${NC}         systemctl status certbot.timer"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${GREEN}┌─ QUICK ALIASES ───────────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${CYAN}shelp${NC}              Show this help menu"
+echo -e "  ${CYAN}sinfo${NC}              Show current server status"
+echo -e "  ${CYAN}clog${NC}               Monitor EC2 setup progress ${YELLOW}(user-data.log)${NC}"
+echo -e "  ${CYAN}vdev${NC}               Start Vite development server"
+echo -e "  ${CYAN}tscope${NC}             View Laravel Telescope info"
+echo -e "  ${CYAN}mailpit${NC}            View Mailpit email testing info"
+echo -e "  ${CYAN}deploy${NC}             Run full deployment"
+echo -e "  ${CYAN}fresh${NC}              Quick rebuild without migrations"
+echo -e "  ${CYAN}artisan${NC}            Run Laravel artisan commands"
+echo -e "  ${CYAN}claude-sync${NC}        Sync Claude Code configuration from S3"
+echo -e "  ${CYAN}gkey${NC}               Display GitHub deploy key"
+echo -e "  ${CYAN}check-ssl${NC}          Check SSL certificate status"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${DIM}═══════════════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${CYAN}            Powered by SYSTEM PATH™ | Built with ❤️  | Est. 2025${NC}"
+echo -e "${DIM}═══════════════════════════════════════════════════════════════════════════════${NC}"

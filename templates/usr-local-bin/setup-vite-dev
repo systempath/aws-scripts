@@ -1,0 +1,61 @@
+#!/bin/bash
+set -euo pipefail
+
+if [ ! -f "/var/www/html/vite.config.js" ] && [ ! -f "/var/www/html/vite.config.ts" ]; then
+    echo "No vite config found in /var/www/html"
+    exit 1
+fi
+
+cd /var/www/html
+
+# Determine which config file exists
+if [ -f "vite.config.js" ]; then
+    CONFIG_FILE="vite.config.js"
+elif [ -f "vite.config.ts" ]; then
+    CONFIG_FILE="vite.config.ts"
+fi
+
+# Backup original config if not already backed up
+if [ ! -f "${CONFIG_FILE}.original" ]; then
+    cp "$CONFIG_FILE" "${CONFIG_FILE}.original"
+    echo "✅ Backed up original config to ${CONFIG_FILE}.original"
+fi
+
+# Check if server config already exists
+if grep -q "host: true" "$CONFIG_FILE"; then
+    echo "✅ Vite server config already configured for external access"
+    exit 0
+fi
+
+echo "Adding server configuration for external access..."
+
+# Create a temporary file with the modified config
+# This preserves Laravel's default plugin configuration
+awk '
+/export default defineConfig\(\{/ {
+    print $0
+    print "    server: {"
+    print "        host: true, // Listen on all addresses"
+    print "        port: 5173,"
+    print "        strictPort: true,"
+    print "        hmr: {"
+    print "            host: process.env.VITE_HMR_HOST || undefined,"
+    print "            port: 5173"
+    print "        },"
+    print "        watch: {"
+    print "            ignored: [\"**/vendor/**\", \"**/node_modules/**\", \"**/.git/**\", \"**/storage/**\"]"
+    print "        }"
+    print "    },"
+    next
+}
+{ print }
+' "$CONFIG_FILE" > "${CONFIG_FILE}.tmp"
+
+# Replace the original with the modified version
+mv "${CONFIG_FILE}.tmp" "$CONFIG_FILE"
+
+chown ubuntu:www-data "$CONFIG_FILE"
+
+echo "✅ Vite configured for external access on port 5173"
+echo "   Server config added while preserving Laravel's default setup"
+echo "   Your CSS imports and plugin configuration remain unchanged"

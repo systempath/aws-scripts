@@ -1,0 +1,22 @@
+[Unit]
+Description=Mailpit Email Testing Service
+After=network.target
+
+[Service]
+Type=simple
+User=nobody
+Group=nogroup
+ExecStart=/usr/local/bin/mailpit
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+
+# Web UI on port 8025, SMTP on port 1025
+Environment="MP_UI_BIND_ADDR=0.0.0.0:8025"
+Environment="MP_SMTP_BIND_ADDR=127.0.0.1:1025"
+Environment="MP_DATA_FILE=/var/lib/mailpit/mailpit.db"
+Environment="MP_MAX_MESSAGES=1000"
+
+[Install]
+WantedBy=multi-user.target

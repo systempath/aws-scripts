@@ -1,0 +1,4 @@
+#!/bin/bash
+# This hook is called after successful renewal
+systemctl reload nginx
+echo "$(date): Nginx reloaded after certificate renewal" >> /var/log/letsencrypt/renewal-nginx.log

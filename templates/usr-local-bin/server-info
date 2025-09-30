@@ -1,0 +1,132 @@
+#!/bin/bash
+
+# Colors
+CYAN='\033[0;36m'
+BRIGHT_CYAN='\033[1;36m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+RED='\033[0;31m'
+BOLD='\033[1m'
+DIM='\033[2m'
+NC='\033[0m'
+
+clear
+echo -e "${BRIGHT_CYAN}"
+echo "╔═══════════════════════════════════════════════════════════════════════════╗"
+echo "║     ███████╗██╗   ██╗███████╗████████╗███████╗███╗   ███╗               ║"
+echo "║     ██╔════╝╚██╗ ██╔╝██╔════╝╚══██╔══╝██╔════╝████╗ ████║               ║"
+echo "║     ███████╗ ╚████╔╝ ███████╗   ██║   █████╗  ██╔████╔██║               ║"
+echo "║     ╚════██║  ╚██╔╝  ╚════██║   ██║   ██╔══╝  ██║╚██╔╝██║               ║"
+echo "║     ███████║   ██║   ███████║   ██║   ███████╗██║ ╚═╝ ██║               ║"
+echo "║     ╚══════╝   ╚═╝   ╚══════╝   ╚═╝   ╚══════╝╚═╝     ╚═╝               ║"
+echo "║                                                                           ║"
+echo "║     ██████╗  █████╗ ████████╗██╗  ██╗         ™                         ║"
+echo "║     ██╔══██╗██╔══██╗╚══██╔══╝██║  ██║                                   ║"
+echo "║     ██████╔╝███████║   ██║   ███████║                                   ║"
+echo "║     ██╔═══╝ ██╔══██║   ██║   ██╔══██║                                   ║"
+echo "║     ██║     ██║  ██║   ██║   ██║  ██║                                   ║"
+echo "║                                                                           ║"
+echo -e "║                    ${YELLOW}Server Status Monitor v1.0${BRIGHT_CYAN}                           ║"
+echo "╚═══════════════════════════════════════════════════════════════════════════╝"
+echo -e "${NC}"
+echo ""
+
+# Server details with improved formatting
+echo -e "${GREEN}┌─ SERVER DETAILS ──────────────────────────────────────────────────────────┐${NC}"
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || curl -s ipinfo.io/ip 2>/dev/null || echo "Unable to detect")
+INSTANCE_ID=$(ec2-metadata --instance-id 2>/dev/null | cut -d " " -f 2 || echo "N/A")
+printf "  %-20s ${BLUE}%s${NC}\n" "Public IP:" "$SERVER_IP"
+printf "  %-20s %s\n" "Instance ID:" "$INSTANCE_ID"
+printf "  %-20s %s\n" "Uptime:" "$(uptime -p)"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+# Service Status with visual indicators
+echo -e "${GREEN}┌─ SERVICE STATUS ──────────────────────────────────────────────────────────┐${NC}"
+check_service() {
+    if systemctl is-active --quiet $1; then
+        printf "  ${GREEN}●${NC} %-20s ${GREEN}[RUNNING]${NC}  ✓\n" "$2"
+    else
+        printf "  ${RED}●${NC} %-20s ${RED}[STOPPED]${NC}  ✗\n" "$2"
+    fi
+}
+
+check_service "nginx" "Nginx"
+check_service "php8.4-fpm" "PHP-FPM 8.4"
+check_service "postgresql" "PostgreSQL 17"
+check_service "redis-server" "Redis"
+check_service "mailpit" "Mailpit"
+check_service "supervisor" "Supervisor"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+# Laravel Status
+echo -e "${GREEN}┌─ LARAVEL STATUS ──────────────────────────────────────────────────────────┐${NC}"
+if [ -f "/var/www/html/artisan" ]; then
+    printf "  ${GREEN}●${NC} %-20s ${GREEN}Installed${NC} ✓\n" "Installation:"
+    if [ -f "/var/www/html/.env" ]; then
+        APP_ENV=$(grep "^APP_ENV=" /var/www/html/.env 2>/dev/null | cut -d '=' -f2 || echo "production")
+        APP_URL=$(grep "^APP_URL=" /var/www/html/.env 2>/dev/null | cut -d '=' -f2 || echo "not set")
+        printf "  %-22s ${YELLOW}%s${NC}\n" "Environment:" "$APP_ENV"
+        printf "  %-22s ${BLUE}%s${NC}\n" "APP_URL:" "$APP_URL"
+    fi
+
+    # Check if node_modules exists
+    if [ -d "/var/www/html/node_modules" ]; then
+        printf "  ${GREEN}●${NC} %-20s ${GREEN}Installed${NC} ✓\n" "NPM Packages:"
+    else
+        printf "  ${YELLOW}●${NC} %-20s ${YELLOW}Not Installed${NC} (run: npm install)\n" "NPM Packages:"
+    fi
+
+    # Check if built assets exist
+    if [ -d "/var/www/html/public/build" ]; then
+        printf "  ${GREEN}●${NC} %-20s ${GREEN}Built${NC} ✓\n" "Built Assets:"
+    else
+        printf "  ${YELLOW}●${NC} %-20s ${YELLOW}Not Built${NC} (run: npm run build)\n" "Built Assets:"
+    fi
+else
+    printf "  ${RED}●${NC} %-20s ${RED}Not Installed${NC}\n" "Installation:"
+    echo -e "  ${YELLOW}Run: sudo setup-laravel${NC}"
+fi
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+# Queue Workers
+echo -e "${GREEN}┌─ QUEUE WORKERS ───────────────────────────────────────────────────────────┐${NC}"
+if command -v supervisorctl &> /dev/null; then
+    WORKERS=$(supervisorctl status laravel-worker:* 2>/dev/null | grep RUNNING | wc -l)
+    if [ "$WORKERS" -gt 0 ]; then
+        printf "  ${GREEN}●${NC} %-20s ${GREEN}%s workers running${NC}\n" "Active Workers:" "$WORKERS"
+    else
+        printf "  ${YELLOW}●${NC} %-20s ${YELLOW}None running${NC}\n" "Active Workers:"
+    fi
+else
+    printf "  ${RED}●${NC} %-20s ${RED}Not available${NC}\n" "Supervisor:"
+fi
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+# Resource Usage
+echo -e "${GREEN}┌─ RESOURCE USAGE ──────────────────────────────────────────────────────────┐${NC}"
+CPU_LOAD=$(uptime | awk -F'load average:' '{print $2}')
+MEMORY=$(free -h | awk 'NR==2{printf "%s / %s (%.1f%%)", $3, $2, $3*100/$2}')
+DISK=$(df -h / | awk 'NR==2{printf "%s / %s (%s)", $3, $2, $5}')
+printf "  %-20s %s\n" "CPU Load:" "$CPU_LOAD"
+printf "  %-20s %s\n" "Memory:" "$MEMORY"
+printf "  %-20s %s\n" "Disk Usage:" "$DISK"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+# Quick Actions
+echo -e "${GREEN}┌─ QUICK CHECKS ────────────────────────────────────────────────────────────┐${NC}"
+echo -e "  ${CYAN}Laravel logs:${NC}      tail -f /var/www/html/storage/logs/laravel.log"
+echo -e "  ${CYAN}Nginx errors:${NC}      tail -f /var/log/nginx/error.log"
+echo -e "  ${CYAN}PHP errors:${NC}        tail -f /var/log/php8.4-fpm.log"
+echo -e "  ${CYAN}Test DB:${NC}           cd /var/www/html && php artisan db:show"
+echo -e "${GREEN}└───────────────────────────────────────────────────────────────────────────┘${NC}"
+echo ""
+
+echo -e "${DIM}═══════════════════════════════════════════════════════════════════════════${NC}"
+echo -e "${CYAN}         Type 'shelp' for commands | Built by SYSTEM PATH™${NC}"
+echo -e "${DIM}═══════════════════════════════════════════════════════════════════════════${NC}"

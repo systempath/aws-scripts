@@ -1,0 +1,30 @@
+#!/bin/bash
+set -euo pipefail
+DOMAIN=${1:?domain required}
+EMAIL=${2:?email required}
+
+echo "Setting up SSL for domain: ${DOMAIN}"
+sed -i "s/server_name _;/server_name ${DOMAIN};/" /etc/nginx/sites-available/default || true
+systemctl reload nginx || true
+
+# Get certificate with nginx plugin
+certbot --nginx -d "${DOMAIN}" -n --agree-tos --email "${EMAIL}" --redirect
+
+# Verify and enable auto-renewal
+echo ""
+echo "Enabling auto-renewal..."
+systemctl enable --now certbot.timer
+
+echo ""
+echo "Testing auto-renewal configuration..."
+if certbot renew --dry-run; then
+    echo ""
+    echo "✅ SSL certificate installed with auto-renewal enabled!"
+    echo "Certificate will auto-renew automatically (checks run twice daily)"
+    echo ""
+    echo "To check certificate status: check-ssl"
+else
+    echo ""
+    echo "⚠️ SSL certificate installed but renewal test failed"
+    echo "Please check: journalctl -u certbot"
+fi

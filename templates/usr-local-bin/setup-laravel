@@ -1,0 +1,553 @@
+#!/bin/bash
+set -euo pipefail
+
+echo "=== Laravel Setup & Configuration Helper ==="
+
+# Check if Laravel is installed
+if [ ! -f "/var/www/html/artisan" ]; then
+    echo "Laravel not found at /var/www/html - Installing now..."
+
+    # Remove existing html directory if it exists and is empty or just has placeholder
+    if [ -d "/var/www/html" ]; then
+        if [ -f "/var/www/html/index.html" ] || [ -z "$(ls -A /var/www/html)" ]; then
+            echo "Removing placeholder content..."
+            rm -rf /var/www/html
+        fi
+    fi
+
+    # Create Laravel project
+    echo "Creating new Laravel project with Inertia/React stack..."
+    cd /var/www
+    sudo -u ubuntu laravel new html -f --git --react --database=pgsql --pest --no-interaction
+
+    # Set proper ownership
+    chown -R ubuntu:www-data /var/www/html
+    chmod -R 755 /var/www/html
+    chmod -R 775 /var/www/html/storage /var/www/html/bootstrap/cache
+
+    echo "✅ Laravel installed successfully"
+else
+    echo "✅ Laravel installation detected"
+fi
+
+cd /var/www/html
+
+# Laravel Breeze with Inertia already includes the CSS import by default
+echo "✅ Laravel Inertia setup includes CSS import by default"
+
+# Get the server's public IP for APP_URL and Vite
+# Try multiple methods to get IP, with EC2 metadata as fallback
+SERVER_IP=$(curl -s ifconfig.me 2>/dev/null || \
+            curl -s ipinfo.io/ip 2>/dev/null || \
+            curl -s http://169.254.169.254/latest/meta-data/public-ipv4 2>/dev/null || \
+            hostname -I | awk '{print $1}' || \
+            echo "127.0.0.1")
+
+# Validate that we got an actual IP
+if [[ ! "$SERVER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "Warning: Could not detect public IP, using private IP"
+    SERVER_IP=$(hostname -I | awk '{print $1}')
+    if [[ ! "$SERVER_IP" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        SERVER_IP="127.0.0.1"
+    fi
+fi
+
+echo "Detected server IP: ${SERVER_IP}"
+
+# Configure database and APP_URL using PHP to properly escape special characters
+if [ -f /home/ubuntu/.db_credentials ]; then
+    echo "Configuring database connection and APP_URL..."
+
+    # Backup existing .env
+    if [ -f .env ]; then
+        sudo -u ubuntu cp .env .env.backup.$(date +%Y%m%d_%H%M%S)
+    fi
+
+    # Use PHP to properly update .env file with escaped values
+    sudo -u ubuntu bash -c "SERVER_IP='${SERVER_IP}' php -r '
+        \$envFile = \".env\";
+        \$env = file_get_contents(\$envFile);
+        \$creds = parse_ini_file(\"/home/ubuntu/.db_credentials\");
+        \$serverIp = getenv(\"SERVER_IP\");
+
+        // Helper function to properly format .env values
+        function formatEnvValue(\$value) {
+            // If value contains spaces, quotes, or special characters, wrap in double quotes
+            if (strpos(\$value, \" \") !== false ||
+                strpos(\$value, \"\\\"\") !== false ||
+                strpos(\$value, \"\\\\\") !== false ||
+                strpos(\$value, \"#\") !== false ||
+                strpos(\$value, \"\\n\") !== false ||
+                strpos(\$value, \"\\r\") !== false) {
+                // Escape quotes and backslashes for inside double quotes
+                \$escaped = str_replace([\"\\\\\", \"\\\"\"], [\"\\\\\\\\\", \"\\\\\\\"\"], \$value);
+                return \"\\\"\" . \$escaped . \"\\\"\";
+            }
+            return \$value;
+        }
+
+        foreach (\$creds as \$key => \$value) {
+            \$formattedValue = formatEnvValue(\$value);
+            \$pattern = \"/^\" . preg_quote(\$key) . \"=.*/m\";
+            if (preg_match(\$pattern, \$env)) {
+                \$env = preg_replace(\$pattern, \$key . \"=\" . \$formattedValue, \$env);
+            } else {
+                \$env .= \"\\n\" . \$key . \"=\" . \$formattedValue;
+            }
+        }
+
+        // Update APP_URL with proper formatting
+        \$appUrl = \"http://\" . \$serverIp;
+        \$env = preg_replace(\"/^APP_URL=.*/m\", \"APP_URL=\" . formatEnvValue(\$appUrl), \$env);
+
+        // Also update Redis settings
+        \$env = preg_replace(\"/^REDIS_HOST=.*/m\", \"REDIS_HOST=127.0.0.1\", \$env);
+        \$env = preg_replace(\"/^CACHE_STORE=.*/m\", \"CACHE_STORE=redis\", \$env);
+        \$env = preg_replace(\"/^SESSION_DRIVER=.*/m\", \"SESSION_DRIVER=redis\", \$env);
+        \$env = preg_replace(\"/^QUEUE_CONNECTION=.*/m\", \"QUEUE_CONNECTION=redis\", \$env);
+
+        // Configure Mailpit for local email testing
+        \$env = preg_replace(\"/^MAIL_MAILER=.*/m\", \"MAIL_MAILER=smtp\", \$env);
+        \$env = preg_replace(\"/^MAIL_HOST=.*/m\", \"MAIL_HOST=127.0.0.1\", \$env);
+        \$env = preg_replace(\"/^MAIL_PORT=.*/m\", \"MAIL_PORT=1025\", \$env);
+        \$env = preg_replace(\"/^MAIL_USERNAME=.*/m\", \"MAIL_USERNAME=null\", \$env);
+        \$env = preg_replace(\"/^MAIL_PASSWORD=.*/m\", \"MAIL_PASSWORD=null\", \$env);
+        \$env = preg_replace(\"/^MAIL_ENCRYPTION=.*/m\", \"MAIL_ENCRYPTION=null\", \$env);
+
+        file_put_contents(\$envFile, \$env);
+        echo \"Database, APP_URL, Redis, and Mailpit configured ✅\\n\";
+    '"
+fi
+
+# Generate application key if needed
+if grep -q "^APP_KEY=$" .env || grep -q "^APP_KEY=\s*$" .env; then
+    echo "Generating application key..."
+    sudo -u ubuntu php artisan key:generate
+fi
+
+# Run migrations
+echo "Running database migrations..."
+sudo -u ubuntu php artisan migrate --force || {
+    echo "Migration failed. Testing database connection..."
+    sudo -u ubuntu php artisan db:show || {
+        echo "Database connection failed. Please check credentials in .env"
+        echo "You can manually edit: nano /var/www/html/.env"
+    }
+}
+
+# Install Laravel Telescope for debugging
+echo ""
+echo "Installing Laravel Telescope..."
+cd /var/www/html
+sudo -u ubuntu composer require laravel/telescope
+
+echo "Publishing Telescope assets..."
+sudo -u ubuntu php artisan telescope:install
+sudo -u ubuntu php artisan migrate --force
+
+# Configure Telescope authorization for development
+echo "Configuring Telescope access..."
+sudo -u ubuntu bash -c "php -r '
+    \$providerFile = \"app/Providers/TelescopeServiceProvider.php\";
+    if (file_exists(\$providerFile)) {
+        \$content = file_get_contents(\$providerFile);
+
+        // Update the gate to allow access from any IP in development
+        \$newGate = \"Gate::define(\\\"viewTelescope\\\", function (\\\$user = null) {
+            // Allow access in local environment
+            if (app()->environment(\\\"local\\\")) {
+                return true;
+            }
+
+            // In other environments, check IP or user email
+            return in_array(request()->ip(), [
+                \\\"127.0.0.1\\\",
+                request()->server(\\\"SERVER_ADDR\\\")
+            ]) || (\\\$user && in_array(\\\$user->email, [
+                // Add your email here: \\\"your@email.com\\\"
+            ]));
+        });\";
+
+        // Replace the existing gate definition
+        \$pattern = \"/Gate::define\\\\([\".chr(39).\"\\\"]viewTelescope[\".chr(39).\"\\\"].*?\\\\}\\\\);/s\";
+        \$content = preg_replace(
+            \$pattern,
+            \$newGate,
+            \$content
+        );
+
+        file_put_contents(\$providerFile, \$content);
+        echo \"Telescope authorization configured\\n\";
+    }
+'"
+
+# Configure Telescope pruning in scheduler
+echo "Setting up Telescope data pruning..."
+sudo -u ubuntu bash -c "php -r '
+    \$kernelFile = \"app/Console/Kernel.php\";
+    if (file_exists(\$kernelFile)) {
+        \$content = file_get_contents(\$kernelFile);
+
+        // Check if pruning already exists
+        if (!str_contains(\$content, \"telescope:prune\")) {
+            // Add pruning command to schedule method
+            \$content = preg_replace(
+                \"/(protected function schedule\(.*?\).*?\{)(.*?)(^\s*\})/ms\",
+                \"\$1\$2\\n        // Prune old Telescope entries (keep 48 hours)\\n        \\\$schedule->command(\\\"telescope:prune --hours=48\\\")->daily();\\n\$3\",
+                \$content
+            );
+
+            file_put_contents(\$kernelFile, \$content);
+            echo \"Telescope pruning scheduled\\n\";
+        }
+    }
+'"
+
+# Add Telescope configuration to .env
+if ! grep -q "TELESCOPE_ENABLED" /var/www/html/.env; then
+    echo "" >> /var/www/html/.env
+    echo "# Telescope Configuration" >> /var/www/html/.env
+    echo "TELESCOPE_ENABLED=true" >> /var/www/html/.env
+    echo "TELESCOPE_CACHE_WATCHER=false" >> /var/www/html/.env
+    echo "TELESCOPE_COMMAND_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_DUMP_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_EVENT_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_EXCEPTION_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_JOB_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_LOG_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_MAIL_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_MODEL_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_NOTIFICATION_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_QUERY_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_REDIS_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_REQUEST_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_GATE_WATCHER=true" >> /var/www/html/.env
+    echo "TELESCOPE_SCHEDULE_WATCHER=true" >> /var/www/html/.env
+fi
+
+echo "✅ Laravel Telescope installed and configured"
+
+# Install Laravel Cashier for Stripe payments
+echo ""
+echo "Installing Laravel Cashier for Stripe..."
+cd /var/www/html
+sudo -u ubuntu composer require laravel/cashier
+
+echo "Publishing Cashier migrations..."
+sudo -u ubuntu php artisan vendor:publish --tag="cashier-migrations"
+sudo -u ubuntu php artisan migrate --force
+
+# Configure Cashier/Stripe in .env
+echo "Configuring Stripe settings..."
+if ! grep -q "STRIPE_KEY" /var/www/html/.env; then
+    echo "" >> /var/www/html/.env
+    echo "# Stripe Configuration" >> /var/www/html/.env
+    echo "STRIPE_KEY=" >> /var/www/html/.env
+    echo "STRIPE_SECRET=" >> /var/www/html/.env
+    echo "STRIPE_WEBHOOK_SECRET=" >> /var/www/html/.env
+    echo "CASHIER_CURRENCY=usd" >> /var/www/html/.env
+    echo "CASHIER_CURRENCY_LOCALE=en" >> /var/www/html/.env
+fi
+
+echo "✅ Laravel Cashier installed and configured"
+
+# Install AWS SDK for PHP
+echo ""
+echo "Installing AWS SDK for PHP..."
+cd /var/www/html
+sudo -u ubuntu composer require aws/aws-sdk-php
+sudo -u ubuntu composer require aws/aws-sdk-php-laravel:~3.0
+
+# Configure AWS in .env
+echo "Configuring AWS settings..."
+if ! grep -q "AWS_ACCESS_KEY_ID" /var/www/html/.env; then
+    echo "" >> /var/www/html/.env
+    echo "# AWS Configuration" >> /var/www/html/.env
+    echo "AWS_ACCESS_KEY_ID=" >> /var/www/html/.env
+    echo "AWS_SECRET_ACCESS_KEY=" >> /var/www/html/.env
+    echo "AWS_DEFAULT_REGION=us-east-1" >> /var/www/html/.env
+    echo "AWS_BUCKET=" >> /var/www/html/.env
+    echo "AWS_USE_PATH_STYLE_ENDPOINT=false" >> /var/www/html/.env
+fi
+
+echo "✅ AWS SDK installed and configured"
+
+# Install Spatie Laravel Data and TypeScript Transformer
+echo ""
+echo "Installing Spatie Laravel Data and TypeScript Transformer..."
+cd /var/www/html
+sudo -u ubuntu composer require spatie/laravel-data
+sudo -u ubuntu composer require spatie/laravel-typescript-transformer
+
+echo "Publishing Spatie package configurations..."
+sudo -u ubuntu php artisan vendor:publish --provider="Spatie\LaravelData\LaravelDataServiceProvider" --tag="data-config"
+sudo -u ubuntu php artisan vendor:publish --provider="Spatie\LaravelTypeScriptTransformer\TypeScriptTransformerServiceProvider"
+
+# Create types directory for TypeScript definitions
+echo "Creating types directory..."
+sudo -u ubuntu mkdir -p /var/www/html/resources/types
+chown -R ubuntu:www-data /var/www/html/resources/types
+
+echo "✅ Spatie Laravel Data and TypeScript Transformer installed"
+
+# Install Laravel Pennant for feature flags
+echo ""
+echo "Installing Laravel Pennant for feature flags..."
+cd /var/www/html
+sudo -u ubuntu composer require laravel/pennant
+
+echo "Publishing Pennant migrations..."
+sudo -u ubuntu php artisan vendor:publish --provider="Laravel\Pennant\PennantServiceProvider"
+sudo -u ubuntu php artisan migrate --force
+
+echo "✅ Laravel Pennant installed and configured"
+
+# Install Spatie Laravel Permission for role and permission management
+echo ""
+echo "Installing Spatie Laravel Permission..."
+cd /var/www/html
+sudo -u ubuntu composer require spatie/laravel-permission
+
+echo "Publishing Permission migrations and config..."
+sudo -u ubuntu php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+sudo -u ubuntu php artisan migrate --force
+
+# Clear cache after installing permissions
+sudo -u ubuntu php artisan optimize:clear
+
+echo "✅ Spatie Laravel Permission installed and configured"
+
+# Install Spatie Laravel Activity Log for audit logging
+echo ""
+echo "Installing Spatie Laravel Activity Log..."
+cd /var/www/html
+sudo -u ubuntu composer require spatie/laravel-activitylog
+
+echo "Publishing Activity Log migrations and config..."
+sudo -u ubuntu php artisan vendor:publish --provider="Spatie\Activitylog\ActivitylogServiceProvider" --tag="activitylog-migrations"
+sudo -u ubuntu php artisan vendor:publish --provider="Spatie\Activitylog\ActivitylogServiceProvider" --tag="activitylog-config"
+sudo -u ubuntu php artisan migrate --force
+
+echo "✅ Spatie Laravel Activity Log installed and configured"
+
+# Install Spatie Laravel Media Library for file management
+echo ""
+echo "Installing Spatie Laravel Media Library..."
+cd /var/www/html
+sudo -u ubuntu composer require spatie/laravel-medialibrary
+
+echo "Publishing Media Library migrations and config..."
+sudo -u ubuntu php artisan vendor:publish --provider="Spatie\MediaLibrary\MediaLibraryServiceProvider" --tag="medialibrary-migrations"
+sudo -u ubuntu php artisan vendor:publish --provider="Spatie\MediaLibrary\MediaLibraryServiceProvider" --tag="medialibrary-config"
+sudo -u ubuntu php artisan migrate --force
+
+echo "✅ Spatie Laravel Media Library installed and configured"
+
+# Install Spatie Laravel PDF for PDF generation
+echo ""
+echo "Installing Spatie Laravel PDF..."
+cd /var/www/html
+sudo -u ubuntu composer require spatie/laravel-pdf
+
+echo "Publishing PDF config..."
+sudo -u ubuntu php artisan vendor:publish --provider="Spatie\LaravelPdf\PdfServiceProvider" --tag="pdf-config"
+
+echo "✅ Spatie Laravel PDF installed and configured"
+
+# Install Laravel Boost for performance optimizations
+echo ""
+echo "Installing Laravel Boost..."
+cd /var/www/html
+sudo -u ubuntu composer require laravel/boost
+sudo -u ubuntu php artisan boost:install -n
+echo "✅ Laravel Boost installed and configured"
+
+# Fix npm dependencies for ARM64
+echo "Fixing npm dependencies for ARM64..."
+cd /var/www/html
+sudo -u ubuntu npm rebuild
+sudo -u ubuntu npm install --platform=linux --arch=arm64 lightningcss
+
+# Install NPM dependencies if needed
+if [ ! -d "node_modules" ] || [ ! -f "node_modules/.bin/vite" ]; then
+    echo "Installing NPM dependencies..."
+    sudo -u ubuntu npm ci || sudo -u ubuntu npm install
+fi
+
+# Ensure all npm binaries are executable
+if [ -d "node_modules/.bin" ]; then
+    echo "Making npm binaries executable..."
+    chmod +x node_modules/.bin/* 2>/dev/null || true
+fi
+
+# Build assets
+echo "Building production assets..."
+sudo -u ubuntu npm run build || {
+    echo "Build failed. Trying to fix and rebuild..."
+    sudo -u ubuntu npm cache clean --force
+    sudo -u ubuntu rm -rf node_modules package-lock.json
+    sudo -u ubuntu npm install
+    sudo -u ubuntu npm run build
+}
+
+# Optimize Laravel (skip route caching if using closures)
+echo "Optimizing Laravel..."
+sudo -u ubuntu php artisan config:cache
+sudo -u ubuntu php artisan route:cache 2>/dev/null || echo "Route caching skipped (using closures)"
+sudo -u ubuntu php artisan view:cache
+
+# Fix permissions
+echo "Setting proper permissions..."
+sudo /usr/local/bin/laravel-fix-perms
+
+# Start queue workers
+echo "Starting queue workers..."
+supervisorctl reread
+supervisorctl update
+supervisorctl start laravel-worker:* || true
+
+# Reload services
+systemctl reload nginx
+systemctl reload php*-fpm
+
+# Configure Vite for development with dynamic host support
+echo "Configuring Vite for development..."
+if [ -f "/var/www/html/vite.config.js" ] || [ -f "/var/www/html/vite.config.ts" ]; then
+    /usr/local/bin/setup-vite-dev
+    echo "Vite configured for external access on port 5173"
+else
+    echo "No Vite config found - skipping Vite setup"
+fi
+
+# Sync Claude configuration from S3
+echo ""
+echo "Syncing Claude Code configuration..."
+# Run sync but don't fail if some files are missing
+/usr/local/bin/sync-claude-config || true
+
+echo ""
+echo "=== Final Production Optimization ==="
+echo "======================================"
+
+# Clear all caches for clean slate
+echo "Clearing all caches for fresh optimization..."
+sudo -u ubuntu php artisan optimize:clear
+
+# CRITICAL: Optimize composer autoloader for development
+echo "Optimizing Composer autoloader (critical for performance)..."
+cd /var/www/html
+sudo -u ubuntu composer dump-autoload --optimize
+
+# Cache all Laravel components
+echo "Caching Laravel configuration..."
+sudo -u ubuntu php artisan config:cache
+
+echo "Caching routes..."
+sudo -u ubuntu php artisan route:cache 2>/dev/null || echo "Route caching skipped (using closures)"
+
+echo "Caching views..."
+sudo -u ubuntu php artisan view:cache
+
+echo "Caching events..."
+sudo -u ubuntu php artisan event:cache 2>/dev/null || echo "Event caching skipped"
+
+# Run Laravel's optimize command
+echo "Running Laravel optimization..."
+sudo -u ubuntu php artisan optimize
+
+# Clear PHP OPcache
+echo "Clearing PHP OPcache..."
+sudo -u ubuntu php -r "if (function_exists('opcache_reset')) { opcache_reset(); echo 'OPcache cleared'; }"
+
+echo "✅ Production optimization complete!"
+
+# Start queue workers with optimized code
+echo "Starting queue workers..."
+supervisorctl reread
+supervisorctl update
+supervisorctl start laravel-worker:* || true
+
+# Prepare repository for development (Pest testing setup)
+echo ""
+echo "Preparing repository for development..."
+/usr/local/bin/prepare-repo || true
+
+# Create initial git commit with all configurations
+echo ""
+echo "Creating git commit..."
+cd /var/www/html
+sudo -u ubuntu git add -A
+sudo -u ubuntu git commit -m "Initial Laravel setup with all packages and configurations
+
+- Laravel with Inertia/React stack
+- PostgreSQL database configuration
+- Redis cache and session storage
+- Laravel Telescope for debugging
+- Laravel Cashier for Stripe payments
+- AWS SDK integration
+- Spatie Laravel Data and TypeScript Transformer
+- Laravel Pennant for feature flags
+- Spatie Laravel Permission for roles and permissions
+- Spatie Laravel Activity Log for audit logging
+- Spatie Laravel Media Library for file management
+- Spatie Laravel PDF for PDF generation
+- Laravel Boost for performance
+- Mailpit for email testing
+- Vite development server configured
+- Claude Code configuration synced" || echo "Git commit skipped (nothing to commit or not a git repo)"
+
+echo "✅ Git repository initialized with initial commit"
+
+echo ""
+echo "==================================="
+echo "✅ Laravel configuration complete!"
+echo "==================================="
+echo ""
+echo "Your app is now available at:"
+echo "  http://$(curl -s ifconfig.me 2>/dev/null || echo 'your-server-ip')"
+echo ""
+echo "Installed packages:"
+echo "  ✅ Laravel Telescope (debugging): /telescope"
+echo "  ✅ Laravel Cashier (Stripe payments)"
+echo "  ✅ AWS SDK (S3, SES, etc.)"
+echo "  ✅ Spatie Laravel Data (DTOs with validation)"
+echo "  ✅ Spatie TypeScript Transformer (type safety)"
+echo "  ✅ Laravel Pennant (feature flags)"
+echo "  ✅ Spatie Laravel Permission (roles & permissions)"
+echo "  ✅ Spatie Laravel Activity Log (audit logging)"
+echo "  ✅ Spatie Laravel Media Library (file management)"
+echo "  ✅ Spatie Laravel PDF (PDF generation)"
+echo "  ✅ Laravel Boost (performance optimizations)"
+echo "  ✅ Mailpit (email testing): port 8025"
+echo ""
+echo "Laravel Telescope (debugging dashboard):"
+echo "  http://$(curl -s ifconfig.me 2>/dev/null || echo 'your-server-ip')/telescope"
+echo ""
+echo "Mailpit (email testing):"
+echo "  http://$(curl -s ifconfig.me 2>/dev/null || echo 'your-server-ip'):8025"
+echo ""
+echo "Database credentials: /home/ubuntu/.db_credentials"
+echo "Adminer (DB management): http://$(curl -s ifconfig.me 2>/dev/null || echo 'your-server-ip'):8080"
+echo ""
+echo "Configuration needed:"
+echo "  • Add Stripe keys to .env (STRIPE_KEY, STRIPE_SECRET)"
+echo "  • Add AWS credentials to .env if using S3/SES"
+echo ""
+echo "Development commands:"
+echo "  vdev                  # Start Vite dev server (shortest!)"
+echo "  deploy                # Full deployment with migrations"
+echo "  fresh                 # Quick rebuild without migrations"
+echo "  artisan               # Laravel artisan shortcut"
+echo "  tscope                # Telescope dashboard info"
+echo "  mailpit               # Mailpit email testing info"
+echo "  php artisan tinker    # Laravel REPL"
+echo "  supervisorctl status  # Check queue workers"
+echo ""
+echo "Quick commands:"
+echo "  - Use 'vdev' to start Vite with HMR"
+echo "  - Use 'deploy' for full production build"
+echo "  - Use 'fresh' for quick rebuild"
+echo "  - Direct Vite access: http://$(curl -s ifconfig.me 2>/dev/null || echo 'your-server-ip'):5173"
+echo ""
+echo "To set up SSL (after DNS is configured):"
+echo "  setup-ssl yourdomain.com your@email.com"
